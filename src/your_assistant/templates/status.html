@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}状态 · 个人助手{% endblock %}
+{% block content %}
+<section class="hero"><h1>状态</h1></section>
+
+<section class="card">
+  <h2>能力</h2>
+  <dl class="kv">
+    {% for key, value in settings_summary.items() %}
+      <dt>{{ key }}</dt><dd>{{ value }}</dd>
+    {% endfor %}
+  </dl>
+  <p class="muted small">发送/删除邮件的开关默认关闭；打开也需要额外的适配器实现，当前版本不提供。</p>
+</section>
+
+<section class="card">
+  <h2>邮件</h2>
+  <dl class="kv">
+    <dt>缓存</dt><dd>{{ counts.total }} 封（未读 {{ counts.unread }}，非常重要 {{ counts.critical }}）</dd>
+    <dt>上次同步</dt><dd>{{ sync_state.last_sync_at if sync_state else "从未同步" }}</dd>
+    <dt>同步错误</dt><dd>{{ (sync_state.last_error if sync_state else "") or "无" }}</dd>
+  </dl>
+</section>
+
+<section class="card">
+  <h2>索引</h2>
+  <dl class="kv">
+    <dt>文档</dt><dd>{{ docs }}</dd>
+    <dt>文本块</dt><dd>{{ blocks }}</dd>
+  </dl>
+</section>
+
+<section class="card">
+  <h2>最近事件</h2>
+  {% if events %}
+  <ul class="events">
+    {% for event in events %}
+      <li><span class="muted small">{{ event.at }}</span> <code>{{ event.kind }}</code> <span class="muted small">{{ event.payload|truncate(120) }}</span></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    <p class="muted">还没有事件。</p>
+  {% endif %}
+</section>
+{% endblock %}

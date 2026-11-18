@@ -1,0 +1,32 @@
+{% import "_icons.html" as ui %}
+<div class="widget" data-card="mail">
+    {% if counts.important_unread %}<span class="widget-dot" aria-hidden="true"></span>{% endif %}
+    <span class="widget-label">{{ ui.icon("mail", 13) }} 邮件</span>
+    <div class="mail-top">
+      <div class="mail-total">
+        <span class="widget-value">{{ today_mail_count }}</span>
+        <span class="widget-sub">今天收到</span>
+      </div>
+      {% if mail_categories %}
+      <ul class="mail-cats">
+        {% for item in mail_categories %}
+        <li><span class="mail-cat-name">{{ ui.icon("cat_" ~ item.value, 13) }}{{ item.label }}</span><span class="mail-cat-count">{{ item.count }}</span></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+    {% if important_mails %}
+    <div class="widget-important-list">
+      {% for mail in important_mails %}
+      <a class="widget-important" href="/mail/{{ mail.id }}" title="{{ mail.subject }}">
+        <span class="widget-important-label">重要</span>
+        <span class="widget-important-title">{{ mail.subject or "（无主题）" }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if reminders %}
+    <span class="widget-alert">{{ reminders|length }} 封重要邮件待处理</span>
+    {% endif %}
+    <a class="widget-foot" href="/mail">{{ ui.icon("mail_open", 13) }} 打开邮件 →</a>
+  </div>

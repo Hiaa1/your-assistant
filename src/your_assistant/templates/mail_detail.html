@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ message.subject or "邮件" }} · 个人助手{% endblock %}
+{% block content %}
+{% import "_icons.html" as ui %}
+<article class="card">
+  <p class="muted small"><a href="/mail">{{ ui.icon("back", 12) }} 返回收件箱</a></p>
+  <h1 class="title">{{ message.subject or "（无主题）" }}</h1>
+  <p class="muted">
+    {{ message.sender }}<br>
+    {{ message.sent_at|dt("%Y-%m-%d %H:%M") }}
+    {% if message.recipients %} · 收件人 {{ message.recipients|join(", ")|truncate(60) }}{% endif %}
+  </p>
+  <p>
+    <span class="badge {{ message.category.value }}">{{ category_labels[message.category] }}</span>
+    <span class="muted small">{{ notify_labels[message.notify] }} · {{ message.classification_reason }}</span>
+  </p>
+
+  <div class="actions">
+    {% if message.unread %}
+    <form method="post" action="/mail/{{ message.id }}/ack" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button type="submit">标记为已读（仅本地）</button>
+    </form>
+    {% endif %}
+  </div>
+
+
+
+  <details class="relabel">
+    <summary>{{ ui.icon("tag", 12) }} 改判类别（会学成一条规则）</summary>
+    <form method="post" action="/mail/{{ message.id }}/label" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>类别
+        <select name="category">
+          {% for value, label in category_labels.items() %}
+            <option value="{{ value }}" {% if message.category == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>标签（逗号分隔）
+        <input type="text" name="tags" value="{{ message.tags|join(', ') }}" placeholder="paper, deadline">
+      </label>
+      <p class="muted small">提交后会按发件域名 + 主题关键词写进 <code>rules/mail_rules.yaml</code>，并可用 Git 回滚。</p>
+      <button type="submit">保存并学习</button>
+    </form>
+  </details>
+
+  <hr>
+  {% if body_html %}
+  <iframe class="mail-html" sandbox="" title="邮件正文" srcdoc="{{ body_html|e }}"></iframe>
+  {% else %}
+  <pre class="body">{{ message.body_text or "（无正文）" }}</pre>
+  {% endif %}
+</article>
+
+<section class="card">
+  <h2>同一线程（{{ thread|length }} 封）</h2>
+  <ul class="list thread">
+    {% for item in thread %}
+    <li class="{{ 'current' if item.id == message.id else '' }}">
+      <a href="/mail/{{ item.id }}">
+        <span class="muted small">{{ item.sent_at|dt }}</span>
+        <span class="subject">{{ item.subject or "（无主题）" }}</span>
+        <span class="muted small">{{ item.sender|truncate(36) }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}今日总结 · 个人助手{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>今日总结</h1>
+  <p class="page-date">{{ today_label }}</p>
+</header>
+
+<article class="panel">
+  {% if review_html %}
+  <div class="review-full">{{ review_html|safe }}</div>
+  {% else %}
+  <p class="empty">今天还没有总结。每日 20:00 自动生成；没有会话记录时也会写一份确定性摘要。</p>
+  {% endif %}
+</article>
+
+<p class="muted small"><a href="/reviews">← 历史总结</a></p>
+{% endblock %}

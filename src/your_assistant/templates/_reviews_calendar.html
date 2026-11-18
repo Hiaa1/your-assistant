@@ -1,0 +1,22 @@
+<div class="history-nav">
+  <a href="/reviews?month={{ prev_month }}&partial=1" data-history>←</a>
+  <span>{{ month_label }}</span>
+  <a href="/reviews?month={{ next_month }}&partial=1" data-history>→</a>
+</div>
+<table class="calendar">
+  <thead>
+    <tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr>
+  </thead>
+  <tbody>
+    {% for week in weeks %}
+    <tr>
+      {% for day in week %}
+      <td class="{{ 'out' if not day.in_month else '' }}{{ ' has' if day.has else '' }}">
+        {% if day.has %}<a href="/review?date={{ day.iso }}&partial=1" data-history>{{ day.day }}</a>{% elif day.in_month %}{{ day.day }}{% endif %}
+      </td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="muted small">有总结的日期可以点开。</p>

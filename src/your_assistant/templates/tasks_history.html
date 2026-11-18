@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}任务历史 · 个人助手{% endblock %}
+{% block content %}
+{% import "_icons.html" as ui %}
+<header class="page-head">
+  <h1>{{ ui.icon("tasks", 20) }} 任务历史</h1>
+  <p class="page-date">{{ rows|length }} 天</p>
+</header>
+
+<section class="panel">
+  {% if rows %}
+  {% for row in rows %}
+  <details class="task-history">
+    <summary>
+      <span>{{ row.day }}</span>
+      <span class="muted small">完成 {{ row.done }}/{{ row.total }} · {{ row.spent|dur }}</span>
+    </summary>
+    <pre class="body">{{ row.text }}</pre>
+  </details>
+  {% endfor %}
+  {% else %}
+  <p class="empty">还没有任务记录。</p>
+  {% endif %}
+</section>
+
+<p class="muted small"><a href="/">← 返回</a></p>
+{% endblock %}

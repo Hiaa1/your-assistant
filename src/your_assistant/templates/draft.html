@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}确认稿 #{{ draft.id }} · 个人助手{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>确认稿 #{{ draft.id }}</h1>
+  <p class="muted small">
+    {% if message %}<a href="/mail/{{ message.id }}">← 对应邮件</a> · {% endif %}
+    版本 <code>{{ draft.revision }}</code>
+    {% if draft.updated_at %}· 更新于 {{ draft.updated_at|dt }}{% endif %}
+  </p>
+</section>
+
+{% if confirmed or draft.confirmed_at %}
+<section class="card ok-card">
+  <h2>已确认 ✓</h2>
+  <p>内容已写入归档，提醒已停止。此版本不可再修改。</p>
+  {% if draft.confirmed_path %}
+  <p>
+    <a href="/doc?path={{ draft.confirmed_path|urlencode }}&start=1&end=60">打开归档原文 {{ draft.confirmed_path|dpath }}</a>
+  </p>
+  {% endif %}
+</section>
+<section class="card">
+  <h2>最终内容</h2>
+  <pre class="body">{{ draft.body }}</pre>
+</section>
+{% else %}
+<section class="card">
+  <h2>编辑后确认</h2>
+  {% if saved %}<p class="ok">已保存（版本 {{ draft.revision }}）。确认前请再复核一遍。</p>{% endif %}
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <form method="post" action="/drafts/{{ draft.id }}/save" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>确认稿内容
+      <textarea name="body" rows="22" spellcheck="false">{{ draft.body }}</textarea>
+    </label>
+    <button type="submit">保存修改</button>
+  </form>
+
+  <hr>
+  <form method="post" action="/drafts/{{ draft.id }}/confirm" class="stack"
+        onsubmit="return confirm('确认这份内容并归档？确认后不可修改，也不会发送邮件。');">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="revision" value="{{ draft.revision }}">
+    <button type="submit" class="danger">确认并归档（版本 {{ draft.revision }}）</button>
+  </form>
+  <p class="muted small">
+    确认时会校验版本：如果内容在另一个页面被改过，服务端会拒绝并要求你复核。
+    确认后写入 <code>vault/outbox/</code> 并停止该邮件的提醒；不会发送任何邮件。
+  </p>
+</section>
+{% endif %}
+{% endblock %}

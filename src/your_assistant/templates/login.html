@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}登录 · 个人助手{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>个人助手</h1>
+  <p class="muted">单用户登录。登录后可查看未读邮件、检索资料、确认操作。</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if key_link %}
+    <p class="muted small">手机可以直接打开带 key 的链接登录（在电脑上运行 <code>your-assistant link</code> 查看），
+    也可以在这里输入同一个 key 作为密码。</p>
+  {% endif %}
+  {% if not password_set %}
+    <p class="error">还没有设置 <code>ASSISTANT_PASSWORD</code>，请先在 <code>.env</code> 里填写。</p>
+  {% endif %}
+  <form method="post" action="/login" class="stack">
+    <label>密码
+      <input type="password" name="password" autocomplete="current-password" required autofocus>
+    </label>
+    <button type="submit">进入</button>
+  </form>
+</section>
+{% endblock %}

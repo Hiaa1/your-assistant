@@ -1,0 +1,898 @@
+{% extends "base.html" %}
+{% block title %}个人助手{% endblock %}
+{% block content %}
+{% import "_icons.html" as ui %}
+<header class="page-head">
+  <h1>{{ ui.icon("today", 20) }} Today</h1>
+  <div class="clock" id="clock" aria-label="当前时间"></div>
+  <p class="page-date">{{ today_label }}</p>
+</header>
+
+<div id="focus-host">{{ focus_html|safe }}</div>
+
+<div class="dashboard" id="dashboard">
+
+<section class="panel task-panel" data-card="tasks">
+  <div class="panel-head">
+    <h2>{{ ui.icon("tasks", 13) }} 今日任务</h2>
+    <div class="panel-tools">
+      <span class="panel-meta"><span id="task-count">{{ tasks|length }}</span> 项</span>
+      <a class="task-history-link" href="/tasks">历史</a>
+      <button type="button" id="task-edit-toggle" class="panel-icon" title="编辑任务" aria-label="编辑任务">
+        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M11.2 1.9a1.5 1.5 0 0 1 2.1 2.1L5.4 11.9l-3 .8.8-3 8-7.8Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="task-list">{% include "_tasks.html" %}</div>
+
+  <div id="task-editor-host" hidden>{% include "_tasks_editor.html" %}</div>
+</section>
+
+  {% include "_mail_card.html" %}
+
+  <div class="widget" data-card="review">
+    <span class="widget-label">{{ ui.icon("review", 13) }} 今日总结</span>
+    {% if review_summary %}
+    <span class="widget-text" id="review-summary">{{ review_summary }}</span>
+    {% else %}
+    <span class="widget-text muted" id="review-summary">今天还没有总结</span>
+    {% endif %}
+    <div class="widget-actions">
+      <a class="widget-foot" href="/review">{{ ui.icon("book", 13) }} 阅读全文 →</a>
+      <a class="widget-foot" href="/reviews">{{ ui.icon("calendar", 13) }} 历史</a>
+      <button type="button" class="widget-mini" id="review-run" data-csrf="{{ csrf }}">{{ ui.icon("wand", 13) }} 立即总结</button>
+    </div>
+    <span class="review-progress" id="review-progress"></span>
+    <div class="review-bar" id="review-bar" hidden><div class="review-fill" id="review-fill"></div></div>
+  </div>
+
+  <div class="widget widget-blog" data-card="blog">
+    <span class="widget-label">{{ ui.icon("blog", 13) }} 博客</span>
+    {% if latest_post %}
+    <span class="blog-title">{{ latest_post.title }}</span>
+    <span class="widget-text">{{ latest_post.excerpt }}</span>
+    <a class="widget-foot" href="/blog/{{ latest_post.slug }}">阅读全文 →</a>
+    {% else %}
+    <span class="widget-text muted">还没有文章</span>
+    <a class="widget-foot" href="/blog">把 Markdown 放进 vault/blog/ →</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="win-modal" id="rest-modal" hidden>
+  <div class="win-dialog" role="dialog" aria-modal="true" aria-label="休息提醒">
+    <div class="win-title">
+      <span>休息一下</span>
+      <button type="button" class="win-close" data-rest-close aria-label="关闭">×</button>
+    </div>
+    <div class="win-body">
+      <p id="rest-text">任务已结束，休息一下吧。</p>
+      <p class="muted small">站起来走走，喝口水，别连着干。</p>
+      <button type="button" class="win-ok" data-rest-close>{{ ui.icon("ok", 12) }} 好的</button>
+    </div>
+  </div>
+</div>
+
+<div class="win-modal" id="history-modal" hidden>
+  <div class="win-dialog history-dialog">
+    <div class="win-title">
+      <span>历史总结</span>
+      <button type="button" class="win-close" data-history-close aria-label="关闭">×</button>
+    </div>
+    <div class="win-body" id="history-body"></div>
+  </div>
+</div>
+
+<div class="win-modal" id="greet-modal" hidden>
+  <div class="win-dialog greet-dialog">
+    <div class="win-title">
+      <span>早上好</span>
+      <button type="button" class="win-close" data-greet-close aria-label="关闭">×</button>
+    </div>
+    <div class="win-body greet-body">
+      <div class="greet-icons" id="greet-icons"></div>
+      <div class="greet-text">
+        <p class="greet-hello" id="greet-hello"></p>
+        <p class="greet-date" id="greet-date"></p>
+        <p class="greet-festival" id="greet-festival"></p>
+        <p class="greet-message" id="greet-message"></p>
+        <button type="button" class="win-ok" data-greet-close>{{ ui.icon("ok", 12) }} 好的</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const root = document.getElementById("clock");
+  if (!root) return;
+
+  const makeDigit = () => {
+    const el = document.createElement("span");
+    el.className = "digit";
+    el.innerHTML =
+      '<span class="face dtop"><i>0</i></span>' +
+      '<span class="face dbottom"><i>0</i></span>' +
+      '<span class="face dtop flip-top"><i>0</i></span>' +
+      '<span class="face dbottom flip-bottom"><i>0</i></span>';
+    return el;
+  };
+
+  const groups = [];
+  for (let g = 0; g < 3; g += 1) {
+    const wrap = document.createElement("span");
+    wrap.className = "clock-group";
+    const digits = [makeDigit(), makeDigit()];
+    wrap.append(...digits);
+    root.append(wrap);
+    groups.push(digits);
+    if (g < 2) {
+      const colon = document.createElement("span");
+      colon.className = "clock-colon";
+      colon.textContent = ":";
+      root.append(colon);
+    }
+  }
+
+  const paint = (el, value, animate) => {
+    const [top, bottom, flipTop, flipBottom] = el.querySelectorAll("i");
+    const previous = el.dataset.value;
+    el.dataset.value = value;
+    if (!animate || previous === value) {
+      top.textContent = value;
+      bottom.textContent = value;
+      flipTop.textContent = value;
+      flipBottom.textContent = value;
+      return;
+    }
+    clearTimeout(el._timerA);
+    clearTimeout(el._timerB);
+    top.textContent = value;
+    flipTop.textContent = previous;
+    flipBottom.textContent = value;
+    el.classList.remove("flipping");
+    void el.offsetWidth;
+    el.classList.add("flipping");
+    el._timerA = setTimeout(() => {
+      bottom.textContent = value;
+    }, 150);
+    el._timerB = setTimeout(() => {
+      el.classList.remove("flipping");
+    }, 340);
+  };
+
+  const render = (animate) => {
+    const now = new Date();
+    const parts = [now.getHours(), now.getMinutes(), now.getSeconds()];
+    parts.forEach((value, index) => {
+      const text = String(value).padStart(2, "0");
+      groups[index].forEach((el, digitIndex) => paint(el, text[digitIndex], animate));
+    });
+  };
+
+  render(false);
+  setInterval(() => render(true), 1000);
+})();
+
+(() => {
+  const list = document.getElementById("task-list");
+  const editorHost = document.getElementById("task-editor-host");
+  const focusHost = document.getElementById("focus-host");
+  const restModal = document.getElementById("rest-modal");
+  const restText = document.getElementById("rest-text");
+
+  const showRest = (title) => {
+    if (!restModal) return;
+    restText.textContent = "「" + title + "」已结束，休息一下吧。";
+    restModal.hidden = false;
+  };
+  document.querySelectorAll("[data-rest-close]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      restModal.hidden = true;
+    });
+  });
+
+  const syncFocusTime = () => {
+    const time = document.querySelector(".focus-time");
+    if (!time) return;
+    const running = list.querySelector(".countdown");
+    if (running) time.textContent = running.textContent;
+  };
+  const toggle = document.getElementById("task-edit-toggle");
+  if (!list || !editorHost || !toggle) return;
+  const countEl = document.getElementById("task-count");
+  let timers = [];
+  let editing = false;
+
+  const fmt = (total) => {
+    const t = Math.max(0, Math.round(total));
+    const m = Math.floor(t / 60);
+    const s = t % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
+  const clearTimers = () => {
+    timers.forEach(clearInterval);
+    timers = [];
+  };
+
+  const bindCountdowns = () => {
+    clearTimers();
+    list.querySelectorAll(".countdown").forEach((cell) => {
+      const started = new Date(cell.dataset.started).getTime();
+      const stopForm = cell.closest(".task")?.querySelector('form[action$="/stop"]');
+      if (cell.dataset.mode === "up") {
+        const overtime = Number(cell.dataset.overtime);
+        const renderUp = () => {
+          cell.textContent = fmt(overtime + (Date.now() - started) / 1000);
+        };
+        renderUp();
+        timers.push(setInterval(renderUp, 500));
+        return;
+      }
+      const total = Number(cell.dataset.total);
+      const elapsed = Number(cell.dataset.elapsed);
+      let fired = false;
+      const render = () => {
+        const left = total - elapsed - (Date.now() - started) / 1000;
+        cell.textContent = fmt(left);
+        if (left <= 0 && !fired) {
+          fired = true;
+          const task = cell.closest(".task");
+          showRest(task ? task.querySelector(".task-title").textContent : "任务");
+          if (stopForm) stopForm.requestSubmit();
+        }
+      };
+      render();
+      timers.push(setInterval(render, 500));
+    });
+  };
+
+  const setEditing = (on) => {
+    editing = on;
+    list.hidden = on;
+    editorHost.hidden = !on;
+    toggle.classList.toggle("active", on);
+  };
+
+  const addRow = () => {
+    const rows = editorHost.querySelector(".task-edit-rows");
+    if (!rows) return;
+    const row = document.createElement("div");
+    row.className = "task-edit-row";
+    row.innerHTML =
+      '<input type="text" name="title" value="" placeholder="任务内容" required>' +
+      '<input type="number" name="minutes" value="25" min="1" max="180" step="1" aria-label="倒计时分钟">' +
+      '<span class="task-unit">分钟</span>' +
+      '<button type="button" class="task-remove" aria-label="删除这一行">×</button>';
+    rows.append(row);
+    row.querySelector("input").focus();
+  };
+
+  const postForm = async (form) => {
+    const response = await fetch(form.action, {
+      method: "POST",
+      headers: {
+        "X-Requested-With": "fetch",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams(new FormData(form)),
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (!data.ok) return;
+    list.innerHTML = data.html;
+    editorHost.innerHTML = data.editor;
+    if (countEl) countEl.textContent = data.count;
+    bindCountdowns();
+    if (focusHost) focusHost.innerHTML = data.focus || "";
+    setEditing(false);
+  };
+
+  toggle.addEventListener("click", () => setEditing(!editing));
+
+  list.addEventListener("submit", (event) => {
+    event.preventDefault();
+    postForm(event.target);
+  });
+
+  editorHost.addEventListener("submit", (event) => {
+    event.preventDefault();
+    postForm(event.target);
+  });
+
+  editorHost.addEventListener("click", (event) => {
+    if (event.target.closest(".task-add")) {
+      addRow();
+      return;
+    }
+    const remove = event.target.closest(".task-remove");
+    if (remove) {
+      remove.closest(".task-edit-row").remove();
+      return;
+    }
+    if (event.target.closest(".task-cancel")) setEditing(false);
+  });
+
+  bindCountdowns();
+  setInterval(syncFocusTime, 500);
+})();
+
+// 每日问候：6 点后第一次打开弹一次
+(() => {
+  const modal = document.getElementById("greet-modal");
+  if (!modal) return;
+  const icons = document.getElementById("greet-icons");
+  const key = "your-assistant-greeting-date";
+  const todayKey = () => {
+    const now = new Date();
+    return (
+      now.getFullYear() +
+      "-" +
+      String(now.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(now.getDate()).padStart(2, "0")
+    );
+  };
+  const show = async () => {
+    try {
+      const response = await fetch("/api/greeting");
+      const data = await response.json();
+      if (!data.ok) return;
+      document.getElementById("greet-hello").textContent = data.hello;
+      document.getElementById("greet-date").textContent = data.date;
+      document.getElementById("greet-festival").textContent = data.festival
+        ? "今天是" + data.festival
+        : "";
+      document.getElementById("greet-message").textContent = data.message;
+      icons.innerHTML = "";
+      const spots = [
+        [4, 8], [4, 42], [4, 76],
+        [20, 3], [20, 88],
+        [76, 5], [76, 46], [76, 86],
+        [40, 2], [40, 90]
+      ];
+      data.icons.forEach((name, index) => {
+        const img = document.createElement("img");
+        img.src = "/static/emoji/" + name;
+        const spot = spots[index % spots.length];
+        const jitter = () => Math.random() * 6 - 3;
+        img.style.top = spot[0] + jitter() + "%";
+        img.style.left = spot[1] + jitter() + "%";
+        img.style.transform = "rotate(" + (Math.random() * 40 - 20) + "deg)";
+        icons.appendChild(img);
+      });
+      modal.hidden = false;
+    } catch (error) {
+      /* 下一轮再试 */
+    }
+  };
+  const maybe = () => {
+    if (new Date().getHours() < 6) return;
+    if (localStorage.getItem(key) === todayKey()) return;
+    localStorage.setItem(key, todayKey());
+    show();
+  };
+  modal.querySelectorAll("[data-greet-close]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      modal.hidden = true;
+    });
+  });
+  maybe();
+  setInterval(maybe, 60000);
+})();
+
+// 历史总结：主页浮动窗口，日历 + 日期切换都不离开页面
+(() => {
+  const modal = document.getElementById("history-modal");
+  const body = document.getElementById("history-body");
+  if (!modal || !body) return;
+  const load = async (url) => {
+    const response = await fetch(url);
+    body.innerHTML = await response.text();
+  };
+  const open = () => {
+    modal.hidden = false;
+    load("/reviews?partial=1");
+  };
+  document.querySelectorAll('a[href="/reviews"]').forEach((link) => {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      open();
+    });
+  });
+  modal.querySelectorAll("[data-history-close]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      modal.hidden = true;
+    });
+  });
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) modal.hidden = true;
+  });
+  body.addEventListener("click", (event) => {
+    const link = event.target.closest("a[data-history]");
+    if (!link) return;
+    event.preventDefault();
+    load(link.getAttribute("href"));
+  });
+})();
+
+// 主页卡片：拖标题栏排序，顺序记在 localStorage
+(() => {
+  const board = document.getElementById("dashboard");
+  if (!board) return;
+  const KEY = "your-assistant-dashboard-order";
+  const cards = () => Array.from(board.querySelectorAll("[data-card]"));
+
+  const save = () => {
+    localStorage.setItem(KEY, JSON.stringify(cards().map((el) => el.dataset.card)));
+  };
+
+  const restore = () => {
+    let order = null;
+    try {
+      order = JSON.parse(localStorage.getItem(KEY) || "null");
+    } catch (error) {
+      return;
+    }
+    if (!Array.isArray(order)) return;
+    order.forEach((id) => {
+      const el = board.querySelector('[data-card="' + id + '"]');
+      if (el) board.appendChild(el);
+    });
+  };
+  restore();
+
+  let dragging = null;
+
+  const start = (event, card) => {
+    if (event.target.closest("button, a, input, textarea, select")) return;
+    dragging = card;
+    card.classList.add("dragging");
+    try {
+      card.setPointerCapture(event.pointerId);
+    } catch (error) {
+      /* 合成事件 */
+    }
+    event.preventDefault();
+  };
+
+  board.addEventListener("pointerdown", (event) => {
+    const handle = event.target.closest(".panel-head, .widget-label");
+    if (!handle) return;
+    const card = handle.closest("[data-card]");
+    if (card) start(event, card);
+  });
+
+  document.addEventListener("pointermove", (event) => {
+    if (!dragging) return;
+    const under = document.elementFromPoint(event.clientX, event.clientY);
+    const target = under ? under.closest("[data-card]") : null;
+    if (!target || target === dragging || !board.contains(target)) return;
+    const rect = target.getBoundingClientRect();
+    const before = event.clientY < rect.top + rect.height / 2;
+    board.insertBefore(dragging, before ? target : target.nextSibling);
+  });
+
+  document.addEventListener("pointerup", () => {
+    if (!dragging) return;
+    dragging.classList.remove("dragging");
+    dragging = null;
+    save();
+  });
+})();
+
+// 邮件卡片：每 30 秒拉一次摘要，避免必须手动刷新页面
+(() => {
+  const board = document.getElementById("dashboard");
+  if (!board) return;
+  const refresh = async () => {
+    const card = board.querySelector('[data-card="mail"]');
+    if (!card) return;
+    try {
+      const response = await fetch("/api/mail/summary");
+      const data = await response.json();
+      if (!data.ok) return;
+      card.outerHTML = data.html;
+      if (window.__applyCatsPosition) window.__applyCatsPosition();
+    } catch (error) {
+      /* 下一轮再试 */
+    }
+  };
+  setInterval(refresh, 30000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refresh();
+  });
+})();
+
+// 分类小纸片：可拖动，位置记在 localStorage，邮件刷新后保持
+(() => {
+  const STORAGE = "your-assistant-mail-cats";
+  let dragging = false;
+  let startX = 0;
+  let startY = 0;
+  let baseX = 0;
+  let baseY = 0;
+  let limits = null;
+
+  const current = () => document.querySelector(".mail-cats");
+
+  const apply = () => {
+    const card = current();
+    if (!card) return;
+    card.style.transform = "translate(" + baseX + "px, " + baseY + "px)";
+  };
+
+  const measure = () => {
+    const card = current();
+    const widget = card ? card.closest(".widget") : null;
+    if (!card || !widget) return;
+    const wr = widget.getBoundingClientRect();
+    const cr = card.getBoundingClientRect();
+    const baseLeft = cr.left - baseX;
+    const baseTop = cr.top - baseY;
+    const pad = 4;
+    limits = {
+      minX: wr.left + pad - baseLeft,
+      maxX: wr.right - pad - (baseLeft + cr.width),
+      minY: wr.top + pad - baseTop,
+      maxY: wr.bottom - pad - (baseTop + cr.height)
+    };
+  };
+
+  const clamp = (value, low, high) => Math.min(Math.max(value, low), high);
+
+  const clampPosition = () => {
+    if (!limits) return;
+    if (limits.maxX >= limits.minX) baseX = clamp(baseX, limits.minX, limits.maxX);
+    if (limits.maxY >= limits.minY) baseY = clamp(baseY, limits.minY, limits.maxY);
+    apply();
+  };
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE) || "null");
+    if (saved && typeof saved.x === "number" && typeof saved.y === "number") {
+      baseX = saved.x;
+      baseY = saved.y;
+    }
+  } catch (error) {
+    /* 忽略坏数据 */
+  }
+  apply();
+
+  document.addEventListener("pointerdown", (event) => {
+    const card = event.target.closest(".mail-cats");
+    if (!card || event.button !== 0) return;
+    measure();
+    dragging = true;
+    startX = event.clientX - baseX;
+    startY = event.clientY - baseY;
+    card.classList.add("dragging");
+    try {
+      card.setPointerCapture(event.pointerId);
+    } catch (error) {
+      /* 合成事件没有真实 pointerId */
+    }
+    event.preventDefault();
+  });
+
+  document.addEventListener("pointermove", (event) => {
+    if (!dragging) return;
+    baseX = event.clientX - startX;
+    baseY = event.clientY - startY;
+    clampPosition();
+  });
+
+  document.addEventListener("pointerup", () => {
+    if (!dragging) return;
+    dragging = false;
+    const card = current();
+    if (card) card.classList.remove("dragging");
+    localStorage.setItem(STORAGE, JSON.stringify({ x: baseX, y: baseY }));
+  });
+
+  document.addEventListener("dblclick", (event) => {
+    if (!event.target.closest(".mail-cats")) return;
+    baseX = 0;
+    baseY = 0;
+    apply();
+    localStorage.removeItem(STORAGE);
+  });
+
+  window.__applyCatsPosition = apply;
+})();
+
+// 主页卡片：拖标题栏排序，顺序记在 localStorage
+(() => {
+  const board = document.getElementById("dashboard");
+  if (!board) return;
+  const KEY = "your-assistant-dashboard-order";
+  const cards = () => Array.from(board.querySelectorAll("[data-card]"));
+
+  const save = () => {
+    localStorage.setItem(KEY, JSON.stringify(cards().map((el) => el.dataset.card)));
+  };
+
+  const restore = () => {
+    let order = null;
+    try {
+      order = JSON.parse(localStorage.getItem(KEY) || "null");
+    } catch (error) {
+      return;
+    }
+    if (!Array.isArray(order)) return;
+    order.forEach((id) => {
+      const el = board.querySelector('[data-card="' + id + '"]');
+      if (el) board.appendChild(el);
+    });
+  };
+  restore();
+
+  let dragging = null;
+
+  const start = (event, card) => {
+    if (event.target.closest("button, a, input, textarea, select")) return;
+    dragging = card;
+    card.classList.add("dragging");
+    try {
+      card.setPointerCapture(event.pointerId);
+    } catch (error) {
+      /* 合成事件 */
+    }
+    event.preventDefault();
+  };
+
+  board.addEventListener("pointerdown", (event) => {
+    const handle = event.target.closest(".panel-head, .widget-label");
+    if (!handle) return;
+    const card = handle.closest("[data-card]");
+    if (card) start(event, card);
+  });
+
+  document.addEventListener("pointermove", (event) => {
+    if (!dragging) return;
+    const under = document.elementFromPoint(event.clientX, event.clientY);
+    const target = under ? under.closest("[data-card]") : null;
+    if (!target || target === dragging || !board.contains(target)) return;
+    const rect = target.getBoundingClientRect();
+    const before = event.clientY < rect.top + rect.height / 2;
+    board.insertBefore(dragging, before ? target : target.nextSibling);
+  });
+
+  document.addEventListener("pointerup", () => {
+    if (!dragging) return;
+    dragging.classList.remove("dragging");
+    dragging = null;
+    save();
+  });
+})();
+
+// 邮件卡片：每 30 秒拉一次摘要，避免必须手动刷新页面
+(() => {
+  const board = document.getElementById("dashboard");
+  if (!board) return;
+  const refresh = async () => {
+    const card = board.querySelector('[data-card="mail"]');
+    if (!card) return;
+    try {
+      const response = await fetch("/api/mail/summary");
+      const data = await response.json();
+      if (!data.ok) return;
+      card.outerHTML = data.html;
+      if (window.__applyCatsPosition) window.__applyCatsPosition();
+    } catch (error) {
+      /* 下一轮再试 */
+    }
+  };
+  setInterval(refresh, 30000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refresh();
+  });
+})();
+
+// 分类小纸片：可拖动，限制在邮件纸张范围内
+(() => {
+  const card = document.querySelector(".mail-cats");
+  const widget = card ? card.closest(".widget") : null;
+  if (!card || !widget) return;
+  let dragging = false;
+  let startX = 0;
+  let startY = 0;
+  let baseX = 0;
+  let baseY = 0;
+  let limits = null;
+
+  const apply = () => {
+    card.style.transform = "translate(" + baseX + "px, " + baseY + "px)";
+  };
+
+  const measure = () => {
+    const wr = widget.getBoundingClientRect();
+    const cr = card.getBoundingClientRect();
+    const baseLeft = cr.left - baseX;
+    const baseTop = cr.top - baseY;
+    const pad = 4;
+    limits = {
+      minX: wr.left + pad - baseLeft,
+      maxX: wr.right - pad - (baseLeft + cr.width),
+      minY: wr.top + pad - baseTop,
+      maxY: wr.bottom - pad - (baseTop + cr.height)
+    };
+  };
+
+  const clamp = (value, low, high) => Math.min(Math.max(value, low), high);
+
+  const clampPosition = () => {
+    if (!limits) return;
+    if (limits.maxX >= limits.minX) baseX = clamp(baseX, limits.minX, limits.maxX);
+    if (limits.maxY >= limits.minY) baseY = clamp(baseY, limits.minY, limits.maxY);
+    apply();
+  };
+
+  try {
+    const saved = JSON.parse(localStorage.getItem("your-assistant-mail-cats") || "null");
+    if (saved && typeof saved.x === "number" && typeof saved.y === "number") {
+      baseX = saved.x;
+      baseY = saved.y;
+      apply();
+    }
+  } catch (error) {
+    /* 忽略坏数据 */
+  }
+  measure();
+  clampPosition();
+
+  card.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    measure();
+    dragging = true;
+    startX = event.clientX - baseX;
+    startY = event.clientY - baseY;
+    card.classList.add("dragging");
+    try {
+      card.setPointerCapture(event.pointerId);
+    } catch (error) {
+      /* 合成事件没有真实 pointerId */
+    }
+    event.preventDefault();
+  });
+
+  card.addEventListener("pointermove", (event) => {
+    if (!dragging) return;
+    baseX = event.clientX - startX;
+    baseY = event.clientY - startY;
+    clampPosition();
+  });
+
+  const stop = () => {
+    if (!dragging) return;
+    dragging = false;
+    card.classList.remove("dragging");
+    localStorage.setItem("your-assistant-mail-cats", JSON.stringify({ x: baseX, y: baseY }));
+  };
+  card.addEventListener("pointerup", stop);
+  card.addEventListener("pointercancel", stop);
+  window.addEventListener("resize", () => {
+    measure();
+    clampPosition();
+  });
+  card.addEventListener("dblclick", () => {
+    baseX = 0;
+    baseY = 0;
+    apply();
+    localStorage.removeItem("your-assistant-mail-cats");
+  });
+})();
+
+// 立即总结：后台生成 + 轮询进度（进度条按阶段推进，不追真实百分比）
+(() => {
+  const button = document.getElementById("review-run");
+  if (!button) return;
+  const statusEl = document.getElementById("review-progress");
+  const summaryEl = document.getElementById("review-summary");
+  const bar = document.getElementById("review-bar");
+  const fill = document.getElementById("review-fill");
+  const phaseIcons = {
+    "准备": '<svg viewBox="0 0 16 16" width="14" height="14" shape-rendering="crispEdges"><rect x="6" y="2" width="4" height="12" fill="#6b7280"/><rect x="2" y="6" width="12" height="4" fill="#6b7280"/><rect x="5" y="5" width="6" height="6" fill="#e5e7eb"/><rect x="7" y="7" width="2" height="2" fill="#6b7280"/></svg>',
+    "读取会话": '<svg viewBox="0 0 16 16" width="14" height="14" shape-rendering="crispEdges"><rect x="2" y="6" width="12" height="4" fill="#fff"/><rect x="4" y="5" width="8" height="6" fill="#fff"/><rect x="3" y="6" width="10" height="1" fill="#000"/><rect x="3" y="9" width="10" height="1" fill="#000"/><rect x="6" y="6" width="4" height="4" fill="#5b21b6"/><rect x="7" y="7" width="2" height="2" fill="#000"/></svg>',
+    "归纳中": '<svg viewBox="0 0 16 16" width="14" height="14" shape-rendering="crispEdges"><rect x="2" y="2" width="10" height="7" fill="#fff"/><rect x="2" y="2" width="10" height="1" fill="#000"/><rect x="2" y="8" width="10" height="1" fill="#000"/><rect x="2" y="2" width="1" height="7" fill="#000"/><rect x="11" y="2" width="1" height="7" fill="#000"/><rect x="4" y="4" width="1" height="1" fill="#5b21b6"/><rect x="6" y="4" width="1" height="1" fill="#5b21b6"/><rect x="8" y="4" width="1" height="1" fill="#5b21b6"/><rect x="3" y="9" width="2" height="2" fill="#fff"/><rect x="2" y="11" width="1" height="1" fill="#fff"/></svg>',
+    "整理摘要": '<svg viewBox="0 0 16 16" width="14" height="14" shape-rendering="crispEdges"><rect x="3" y="2" width="10" height="12" fill="#fffdf7"/><rect x="3" y="2" width="10" height="1" fill="#000"/><rect x="3" y="13" width="10" height="1" fill="#000"/><rect x="3" y="2" width="1" height="12" fill="#000"/><rect x="12" y="2" width="1" height="12" fill="#000"/><rect x="5" y="5" width="6" height="1" fill="#6b7280"/><rect x="5" y="8" width="4" height="1" fill="#6b7280"/></svg>',
+    "写入文件": '<svg viewBox="0 0 16 16" width="14" height="14" shape-rendering="crispEdges"><rect x="2" y="2" width="12" height="12" fill="#6b7280"/><rect x="4" y="2" width="6" height="5" fill="#e5e7eb"/><rect x="5" y="3" width="4" height="3" fill="#6b7280"/><rect x="9" y="9" width="3" height="4" fill="#e5e7eb"/></svg>',
+    "已更新": '<svg viewBox="0 0 16 16" width="14" height="14" shape-rendering="crispEdges"><rect x="7" y="1" width="2" height="14" fill="#ffd23f"/><rect x="1" y="7" width="14" height="2" fill="#ffd23f"/><rect x="3" y="3" width="2" height="2" fill="#ffd23f"/><rect x="11" y="3" width="2" height="2" fill="#ffd23f"/><rect x="3" y="11" width="2" height="2" fill="#ffd23f"/><rect x="11" y="11" width="2" height="2" fill="#ffd23f"/></svg>',
+    "失败": '<svg viewBox="0 0 16 16" width="14" height="14" shape-rendering="crispEdges"><rect x="3" y="3" width="10" height="10" fill="#b91c1c"/><rect x="5" y="5" width="2" height="2" fill="#fff"/><rect x="9" y="5" width="2" height="2" fill="#fff"/><rect x="6" y="9" width="4" height="2" fill="#fff"/></svg>'
+  };
+  const setStatus = (key, text) => {
+    statusEl.innerHTML = phaseIcons[key] || "";
+    const label = document.createElement("span");
+    label.textContent = text;
+    statusEl.appendChild(label);
+  };
+
+  const stages = {
+    "准备": 5,
+    "读取会话": 12,
+    "归纳中": 20,
+    "整理摘要": 20,
+    "写入文件": 92,
+    "完成": 100
+  };
+  let timer = null;
+  let creep = null;
+
+  const stopCreep = () => {
+    if (creep) {
+      clearInterval(creep);
+      creep = null;
+    }
+  };
+
+  const startCreep = () => {
+    stopCreep();
+    creep = setInterval(() => {
+      const current = parseFloat(fill.style.width) || 0;
+      if (current < 85) fill.style.width = current + 3 + "%";
+    }, 5000);
+  };
+
+  const setStage = (step) => {
+    const value = stages[step];
+    if (typeof value === "number") fill.style.width = value + "%";
+  };
+
+  const poll = async () => {
+    try {
+      const response = await fetch("/api/review/status");
+      const data = await response.json();
+      if (!data.ok) return;
+      if (data.running) {
+        setStatus(data.step, data.step || "生成中");
+        setStage(data.step);
+        if (data.step === "归纳中" || data.step === "整理摘要") startCreep();
+        else stopCreep();
+        return;
+      }
+      stopCreep();
+      clearInterval(timer);
+      timer = null;
+      button.disabled = false;
+      setStatus(data.error ? "失败" : "已更新", data.error ? "失败：" + data.error : "已更新");
+      setStage(data.error ? "" : "完成");
+      if (data.summary && summaryEl) {
+        summaryEl.textContent = data.summary;
+        summaryEl.classList.remove("muted");
+      }
+    } catch (error) {
+      setStatus("失败", "状态获取失败");
+      stopCreep();
+    }
+  };
+
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    setStatus("准备", "准备…");
+    bar.hidden = false;
+    fill.style.width = "4%";
+    try {
+      const response = await fetch("/review/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ csrf: button.dataset.csrf }),
+      });
+      const data = await response.json();
+      if (!data.ok) {
+        setStatus("失败", "启动失败");
+        button.disabled = false;
+        return;
+      }
+    } catch (error) {
+      setStatus("失败", "启动失败");
+      button.disabled = false;
+      return;
+    }
+    timer = setInterval(poll, 1000);
+    poll();
+  });
+})();
+</script>
+{% endblock %}

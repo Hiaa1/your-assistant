@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ post.title }} · 博客{% endblock %}
+{% block content %}
+{% import "_icons.html" as ui %}
+<header class="page-head">
+  <h1>{{ ui.icon("blog", 20) }} 博客</h1>
+  <p class="page-date">{{ post.slug }}</p>
+</header>
+
+<article class="panel">
+  <div class="blog-body">{{ body|safe }}</div>
+</article>
+
+<p class="muted small"><a href="/blog">← 返回博客</a></p>
+{% endblock %}

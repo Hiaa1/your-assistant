@@ -1,0 +1,8 @@
+<section class="focus-card">
+  <span class="focus-main">
+    <span class="focus-icon">{{ icons[0]|safe if icons else "" }}</span>
+    <span class="focus-title">{{ title }}</span>
+    <span class="focus-icon">{{ icons[1]|safe if icons|length > 1 else "" }}</span>
+  </span>
+  <span class="focus-time">{{ time }}</span>
+</section>

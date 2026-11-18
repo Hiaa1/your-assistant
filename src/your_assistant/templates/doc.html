@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ shown }} · 个人助手{% endblock %}
+{% block content %}
+<section class="card">
+  <p class="muted small"><a href="/" >← 返回</a></p>
+  <h1 class="title">{{ shown }}:{{ start }}{% if end > start %}-{{ end }}{% endif %}</h1>
+  <p class="muted small">这是索引到的原文；高亮区间就是检索命中的段落。</p>
+  <pre class="source">
+{% for number, line in excerpt %}<span class="ln">{{ number }}</span>  <span class="{{ 'hl' if start <= number <= end else '' }}">{{ line }}</span>
+{% endfor %}</pre>
+</section>
+{% endblock %}

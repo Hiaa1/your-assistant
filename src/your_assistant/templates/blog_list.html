@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}博客 · 个人助手{% endblock %}
+{% block content %}
+{% import "_icons.html" as ui %}
+<header class="page-head">
+  <h1>{{ ui.icon("blog", 20) }} 博客</h1>
+  <p class="page-date">{{ posts|length }} 篇</p>
+</header>
+
+<section class="panel">
+  {% if posts %}
+  <ul class="list">
+    {% for post in posts %}
+    <li>
+      <a href="/blog/{{ post.slug }}">
+        <span class="subject">{{ post.title }}</span>
+        <span class="muted small">{{ post.excerpt }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">还没有文章。把 Markdown 放进 <code>vault/blog/</code>。</p>
+  {% endif %}
+</section>
+{% endblock %}

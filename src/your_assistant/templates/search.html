@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}检索 · 个人助手{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>资料检索</h1>
+  <form method="get" action="/search" class="searchbar">
+    <input type="search" name="q" value="{{ query }}" placeholder="例如：报名截止 论文 实验" autofocus>
+    <button type="submit">搜索</button>
+  </form>
+  {% if query %}<p class="muted small">索引更新：写入 {{ written }} 块，删除 {{ deleted }} 个文档。</p>{% endif %}
+</section>
+
+{% if query %}
+<section class="card">
+  <h2>资料命中 {{ hits|length }} 条</h2>
+  {% if hits %}
+    <ul class="hits">
+      {% for hit in hits %}
+      <li>
+        <a class="citation" href="/doc?path={{ hit.path|urlencode }}&start={{ hit.start_line }}&end={{ hit.end_line }}">
+          {{ hit.path|dpath }}:{{ hit.start_line }}{% if hit.end_line > hit.start_line %}-{{ hit.end_line }}{% endif %}
+        </a>
+        <p class="snippet">{{ hit.snippet }}</p>
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">资料里没有找到。可以把相关笔记放进 <code>vault/notes/</code> 后再搜。</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>邮件命中 {{ mails|length }} 条</h2>
+  {% if mails %}
+    <ul class="list">
+      {% for message in mails %}
+      <li>
+        <a href="/mail/{{ message.id }}">
+          <span class="badge {{ message.importance.value }}">{{ importance_labels[message.importance] }}</span>
+          <span class="subject">{{ message.subject or "（无主题）" }}</span>
+          <span class="muted">{{ message.sender|truncate(36) }} · {{ message.sent_at|dt }}</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">没有匹配的邮件。</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

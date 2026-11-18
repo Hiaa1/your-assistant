@@ -1,0 +1,7 @@
+<p class="muted small">{{ today_label }}</p>
+{% if review_html %}
+<div class="review-full">{{ review_html|safe }}</div>
+{% else %}
+<p class="empty">这天没有总结。</p>
+{% endif %}
+<p><a href="/reviews?partial=1" data-history>← 返回日历</a></p>

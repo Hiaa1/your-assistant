@@ -1,0 +1,47 @@
+{% if tasks %}
+<ol class="task-list">
+  {% for task in tasks %}
+  <li class="task{{ ' done' if task.done }}">
+    <form method="post" action="/tasks/{{ task.index }}/toggle" class="inline" data-task="1">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button type="submit" class="task-check" aria-label="{{ '取消完成' if task.done else '标记完成' }}">{% if task.done %}✓{% endif %}</button>
+    </form>
+    <span class="task-title">{{ task.title }}</span>
+    <span class="task-timer">
+      {% if task.running %}
+      <span class="task-live" title="{{ '正计时中' if task.counting_up else '倒计时中' }}">
+        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><circle cx="8" cy="8.6" r="5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 5.8v3l1.9 1.1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M3.4 2.6 2.2 3.8M12.6 2.6l1.2 1.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </span>
+      {% if task.counting_up %}
+      <span class="countdown up" data-mode="up" data-started="{{ task.started_at }}" data-overtime="{{ task.overtime }}">{{ task.overtime|dur }}</span>
+      {% else %}
+      <span class="countdown" data-mode="down" data-started="{{ task.started_at }}" data-total="{{ task.total }}" data-elapsed="{{ task.elapsed }}">{{ task.remaining|dur }}</span>
+      {% endif %}
+      <form method="post" action="/tasks/{{ task.index }}/stop" class="inline" data-task="1">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button type="submit" class="task-btn stop" title="停止计时">■</button>
+      </form>
+      {% else %}
+      <span class="spent">{{ task.remaining|dur }}</span>
+      {% if task.can_overtime %}
+      <form method="post" action="/tasks/{{ task.index }}/overtime" class="inline" data-task="1">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button type="submit" class="task-btn more" title="继续做，开始正计时"{% if task.done %} disabled{% endif %}>+</button>
+      </form>
+      {% else %}
+      <form method="post" action="/tasks/{{ task.index }}/start" class="inline" data-task="1">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button type="submit" class="task-btn" title="开始 {{ task.minutes }} 分钟倒计时"{% if task.done %} disabled{% endif %}>
+          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><circle cx="8" cy="8.6" r="5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 5.8v3l1.9 1.1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M3.4 2.6 2.2 3.8M12.6 2.6l1.2 1.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </button>
+      </form>
+      {% endif %}
+      {% endif %}
+
+    </span>
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="empty">还没有任务。在下面写下今天要做的 1、2、3。</p>
+{% endif %}

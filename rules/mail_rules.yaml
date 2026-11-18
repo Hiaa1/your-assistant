@@ -1,0 +1,87 @@
+# 邮件规则（人可读、可手改、进 Git）
+#
+# 分类与提醒策略（与需求一致）：
+#   论文/导师 → 立即处理并反复提醒
+#   活动      → 正常提醒一次
+#   其他类别  → 不提醒
+#
+# 匹配顺序：learned（界面改判学到的）→ contacts.advisors → base（从上到下）。
+# 一条规则的 when 里，多个条件需要同时满足；只写一个也可以。
+
+contacts:
+  # 导师/合作者的邮箱，写在这里的地址一律判为"论文/导师 + 立即提醒"
+  advisors: []
+  # - boss@lab.edu.cn
+
+categories:
+  paper_advisor: { label: 论文/导师, notify: immediate }
+  career_talk: { label: 宣讲会, notify: none }
+  forum: { label: 论坛, notify: none }
+  event: { label: 活动, notify: normal }
+  announcement: { label: 学校公示, notify: none }
+  advertisement: { label: 外部广告, notify: none }
+  other: { label: 其他, notify: none }
+
+base:
+  - name: 论文投稿与审稿系统
+    category: paper_advisor
+    when:
+      from_contains:
+        ["openreview", "easychair", "editorialmanager", "manuscriptcentral", "scholarone",
+         "springer", "elsevier", "ieee.org", "acm.org", "wiley.com", "arxiv.org",
+         "neurips.cc", "iclr.cc", "icml.cc", "aaai.org", "cvf.com", "siam.org"]
+    tags: [paper, must-read]
+
+  # 学校培训/事务通知优先于"论文"关键词：图书馆的论文写作培训属于日常公示，
+  # 不是导师来信，不应该触发立即提醒。
+  - name: 学校培训与事务通知
+    category: announcement
+    when:
+      subject_regex: "(培训通知|培训报名|培训|公示|公告|闭馆|停水|停电|维修|选课|成绩|奖学金|缴费|教务)"
+    tags: [admin]
+
+  - name: 论文与导师相关讨论
+    category: paper_advisor
+    when:
+      subject_regex: "(论文|投稿|审稿|返修|录用|导师|组会|答辩|开题|中期|rebuttal|revision|camera.?ready|manuscript|reviewer|decision)"
+    tags: [paper]
+
+  - name: 招聘宣讲会
+    category: career_talk
+    when:
+      subject_regex: "(宣讲会|招聘|校招|双选会|实习|campus recruit|career fair)"
+    tags: [job]
+
+  - name: 学术论坛与讲座
+    category: forum
+    when:
+      subject_regex: "(论坛|讲座|研讨会|学术报告|沙龙|seminar|forum|symposium|colloquium)"
+    tags: [academic]
+
+  - name: 校园活动
+    category: event
+    when:
+      subject_regex: "(活动|快闪|演出|音乐会|比赛|开放日|社团|报名|registration|event|workshop|competition|festival)"
+    tags: [event]
+
+  - name: 外部广告
+    category: advertisement
+    when:
+      subject_regex: "(广告|促销|优惠|折扣|抽奖|推广|限时|试用|award|prize|promotion|sponsor)"
+    tags: [ad]
+
+  - name: 学校日常事务公示
+    category: announcement
+    when:
+      subject_regex: "(公示|公告|通知|闭馆|停水|停电|维修|选课|成绩|奖学金|缴费|教务|notice|announcement)"
+    tags: [admin]
+
+learned: []
+# 由"我在界面上改判类别"自动追加，形如：
+# - name: learned-2026-11-18-1
+#   when: {from_contains: ["someone@example.com"]}
+#   category: paper_advisor
+#   tags: [paper]
+#   subject_hint: "…"
+#   evidence: ["<message-id>"]
+#   at: "2026-11-18T09:00:00+08:00"

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>{% block title %}个人助手{% endblock %}</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css?v={{ asset_version }}">
+</head>
+<body>
+{% if authenticated %}
+<header class="top">
+  <a class="brand" href="/">Main</a>
+  <div class="weather" id="weather" role="button" tabindex="0" title="查看今日天气" hidden></div>
+  <form method="post" action="/logout" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button type="submit" class="link">退出</button>
+  </form>
+</header>
+{% endif %}
+<main>
+{% block content %}{% endblock %}
+</main>
+{% if authenticated %}
+<footer class="foot">
+  {% import "_icons.html" as ui %}
+  <a href="/search">{{ ui.icon("docs", 12) }} 资料</a>
+  <span>·</span>
+  <a href="/status">{{ ui.icon("status", 12) }} 状态</a>
+</footer>
+{% endif %}
+{% if authenticated %}
+<div class="win-modal" id="weather-modal" hidden>
+  <div class="win-dialog" role="dialog" aria-modal="true" aria-label="今日天气">
+    <div class="win-title">
+      <span>Weather / Shanghai</span>
+      <button type="button" class="win-close" aria-label="关闭">×</button>
+    </div>
+    <div class="win-body" id="weather-detail"></div>
+  </div>
+</div>
+{% endif %}
+<script>
+(() => {
+  const el = document.getElementById("weather");
+  const modal = document.getElementById("weather-modal");
+  if (!el || !modal) return;
+  const detail = document.getElementById("weather-detail");
+  const closeButton = modal.querySelector(".win-close");
+  const icons = {
+    sun: '<svg viewBox="0 0 16 16" width="14" height="14" shape-rendering="crispEdges"><rect x="2" y="2" width="9" height="9" fill="#ffd23f"/><rect x="4" y="0" width="5" height="2" fill="#ffd23f"/><rect x="0" y="4" width="2" height="5" fill="#ffd23f"/><rect x="11" y="4" width="2" height="5" fill="#ffd23f"/><rect x="4" y="11" width="5" height="2" fill="#ffd23f"/><rect x="4" y="5" width="1" height="2" fill="#111"/><rect x="8" y="5" width="1" height="2" fill="#111"/><rect x="4" y="8" width="5" height="1" fill="#111"/></svg>',
+    "sun-cloud": '<svg viewBox="0 0 16 16" width="14" height="14" shape-rendering="crispEdges"><rect x="2" y="6" width="12" height="4" fill="#a8a8a8"/><rect x="4" y="3" width="8" height="4" fill="#c8c8c8"/></svg>',
+    cloud: '<svg viewBox="0 0 16 16" width="14" height="14" shape-rendering="crispEdges"><rect x="0" y="6" width="10" height="4" fill="#a8a8a8"/><rect x="2" y="3" width="7" height="4" fill="#c8c8c8"/><rect x="10" y="1" width="5" height="5" fill="#ffd23f"/><rect x="11" y="3" width="1" height="1" fill="#111"/><rect x="13" y="3" width="1" height="1" fill="#111"/></svg>',
+    rain: '<svg viewBox="0 0 16 16" width="14" height="14" shape-rendering="crispEdges"><rect x="0" y="5" width="9" height="4" fill="#a8a8a8"/><rect x="1" y="3" width="7" height="3" fill="#c8c8c8"/><rect x="10" y="0" width="6" height="5" fill="#ffd23f"/><rect x="11" y="2" width="1" height="1" fill="#111"/><rect x="14" y="2" width="1" height="1" fill="#111"/><rect x="10" y="5" width="6" height="2" fill="#16a34a"/><rect x="8" y="6" width="2" height="1" fill="#16a34a"/><rect x="5" y="7" width="5" height="3" fill="#4a9eff"/><rect x="4" y="8" width="1" height="2" fill="#4a9eff"/><rect x="2" y="11" width="1" height="3" fill="#4a9eff"/><rect x="5" y="11" width="1" height="3" fill="#4a9eff"/><rect x="8" y="11" width="1" height="3" fill="#4a9eff"/></svg>',
+    snow: '<svg viewBox="0 0 16 16" width="14" height="14" shape-rendering="crispEdges"><rect x="2" y="4" width="12" height="4" fill="#a8a8a8"/><rect x="4" y="2" width="8" height="3" fill="#c8c8c8"/><rect x="3" y="10" width="2" height="2" fill="#bfdbfe"/><rect x="7" y="11" width="2" height="2" fill="#bfdbfe"/><rect x="11" y="10" width="2" height="2" fill="#bfdbfe"/></svg>',
+    storm: '<svg viewBox="0 0 16 16" width="14" height="14" shape-rendering="crispEdges"><rect x="2" y="3" width="12" height="4" fill="#8c8c8c"/><rect x="4" y="1" width="8" height="3" fill="#b0b0b0"/><rect x="7" y="7" width="3" height="3" fill="#ffd23f"/><rect x="5" y="10" width="3" height="4" fill="#ffd23f"/></svg>',
+    fog: '<svg viewBox="0 0 16 16" width="14" height="14" shape-rendering="crispEdges"><rect x="2" y="4" width="12" height="2" fill="#d0d0d0"/><rect x="4" y="7" width="10" height="2" fill="#b8b8b8"/><rect x="2" y="10" width="9" height="2" fill="#d0d0d0"/></svg>',
+    sleet: '<svg viewBox="0 0 16 16" width="14" height="14" shape-rendering="crispEdges"><rect x="2" y="4" width="12" height="4" fill="#a8a8a8"/><rect x="4" y="2" width="8" height="3" fill="#c8c8c8"/><rect x="5" y="10" width="1" height="4" fill="#4a9eff"/><rect x="9" y="11" width="2" height="2" fill="#bfdbfe"/></svg>'
+  };
+  let data = null;
+
+  const renderDetail = () => {
+    if (!data) return;
+    const rows = [
+      ["体感", data.feels + "°C"],
+      ["今日", data.low + "° ~ " + data.high + "°"],
+      ["湿度", data.humidity + "%"],
+      ["风", data.wind],
+      ["降水", data.precip + " mm"],
+      ["云量", data.cloud + "%"],
+      ["紫外线", data.uv],
+      ["能见度", data.visibility + " km"],
+      ["气压", data.pressure + " hPa"],
+      ["日出 / 日落", data.sunrise + " / " + data.sunset]
+    ];
+    detail.innerHTML =
+      '<div class="weather-now">' +
+      (icons[data.icon] || icons.cloud) +
+      "<b>" + data.temp + "°C</b><span>" + data.desc + "</span></div>" +
+      '<dl class="kv">' +
+      rows.map((row) => "<dt>" + row[0] + "</dt><dd>" + row[1] + "</dd>").join("") +
+      "</dl>" +
+      '<p class="muted small">观测 ' + data.observed + " · wttr.in</p>";
+  };
+
+  const open = () => {
+    renderDetail();
+    modal.hidden = false;
+  };
+  const close = () => {
+    modal.hidden = true;
+  };
+
+  el.addEventListener("click", open);
+  el.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      open();
+    }
+  });
+  closeButton.addEventListener("click", close);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) close();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !modal.hidden) close();
+  });
+
+  fetch("/api/weather")
+    .then((response) => response.json())
+    .then((payload) => {
+      if (!payload.ok) return;
+      data = payload;
+      el.innerHTML =
+        '<span class="weather-range">' +
+        '<span class="weather-low">' + data.low + "°</span>" +
+        '<span class="weather-high">' + data.high + "°</span></span>" +
+        (icons[data.icon] || icons.cloud) +
+        '<span class="weather-temp">' + data.temp + "°</span>" +
+        '<span class="weather-desc">' + data.desc + "</span>";
+      el.hidden = false;
+    })
+    .catch(() => {});
+})();
+</script>
+</body>
+</html>

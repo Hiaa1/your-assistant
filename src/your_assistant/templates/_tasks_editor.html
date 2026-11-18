@@ -1,0 +1,27 @@
+{% import "_icons.html" as ui %}
+<form id="task-editor" class="task-editor" method="post" action="/tasks/save" data-task="1">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="task-edit-rows">
+    {% for task in tasks %}
+    <div class="task-edit-row">
+      <input type="text" name="title" value="{{ task.title }}" placeholder="任务内容" required>
+      <input type="number" name="minutes" value="{{ task.minutes }}" min="1" max="180" step="1" aria-label="倒计时分钟">
+      <span class="task-unit">分钟</span>
+      <button type="button" class="task-remove" aria-label="删除这一行">×</button>
+    </div>
+    {% endfor %}
+    {% if not tasks %}
+    <div class="task-edit-row">
+      <input type="text" name="title" value="" placeholder="任务内容" required>
+      <input type="number" name="minutes" value="25" min="1" max="180" step="1" aria-label="倒计时分钟">
+      <span class="task-unit">分钟</span>
+      <button type="button" class="task-remove" aria-label="删除这一行">×</button>
+    </div>
+    {% endif %}
+  </div>
+  <div class="task-edit-actions">
+    <button type="button" class="task-add">{{ ui.icon("plus", 12) }} 添加一行</button>
+    <button type="submit">{{ ui.icon("save", 12) }} 保存</button>
+    <button type="button" class="task-cancel">{{ ui.icon("cancel", 12) }} 取消</button>
+  </div>
+</form>

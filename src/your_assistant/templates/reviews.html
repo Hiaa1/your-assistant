@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}历史总结 · 个人助手{% endblock %}
+{% block content %}
+{% import "_icons.html" as ui %}
+<header class="page-head">
+  <h1>{{ ui.icon("review", 20) }} 历史总结</h1>
+  <p class="page-date">
+    <a href="/reviews?month={{ prev_month }}">←</a>
+    {{ month_label }}
+    <a href="/reviews?month={{ next_month }}">→</a>
+  </p>
+</header>
+
+<section class="panel">
+  <table class="calendar">
+    <thead>
+      <tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr>
+    </thead>
+    <tbody>
+      {% for week in weeks %}
+      <tr>
+        {% for day in week %}
+        <td class="{{ 'out' if not day.in_month else '' }}{{ ' has' if day.has else '' }}">
+          {% if day.has %}<a href="/review?date={{ day.iso }}">{{ day.day }}</a>{% elif day.in_month %}{{ day.day }}{% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted small">有总结的日期可以点开。</p>
+</section>
+
+<p class="muted small"><a href="/">← 返回</a></p>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}邮件 · 个人助手{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>邮件</h1>
+  <p class="page-date">未读 {{ counts.unread }} · 共 {{ counts.total }}</p>
+</header>
+
+<section class="panel">
+  <form method="get" action="/mail" class="filters">
+    <input type="hidden" name="view" value="{{ 'unread' if unread_only else 'all' }}">
+    <input type="search" name="q" value="{{ query }}" placeholder="按主题 / 发件人 / 正文筛选">
+    <select name="category" onchange="this.form.submit()">
+      <option value="">全部类别</option>
+      {% for value, label in category_labels.items() %}
+        <option value="{{ value }}" {% if category == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">筛选</button>
+  </form>
+
+  <div class="tabs">
+    <a class="{{ 'active' if unread_only else '' }}" href="/mail?view=unread{% if query %}&q={{ query|urlencode }}{% endif %}">未读</a>
+    <a class="{{ '' if unread_only else 'active' }}" href="/mail?view=all{% if query %}&q={{ query|urlencode }}{% endif %}">全部</a>
+  </div>
+</section>
+
+<section class="panel">
+  {% if messages %}
+  <ul class="mail-list">
+    {% for message in messages %}
+    <li>
+      <a class="mail-row" href="/mail/{{ message.id }}">
+        <span class="mail-dot {{ message.importance.value }}"></span>
+        <span class="mail-text">
+          <span class="mail-subject">{{ message.subject or "（无主题）" }}</span>
+          <span class="mail-meta">{{ message.sender|truncate(44) }} · {{ message.sent_at|dt }}</span>
+        </span>
+        <span class="pill {{ message.category.value }}">{{ category_labels[message.category] }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">没有符合条件的邮件。</p>
+  {% endif %}
+</section>
+
+<p class="muted small">只读：不会标记服务器已读，也不会发送或删除邮件。</p>
+{% endblock %}
