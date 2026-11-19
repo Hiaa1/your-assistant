@@ -1,6 +1,7 @@
 """读取历史 agent 会话（pi / codex），用于每日复盘。
 
 只读：不修改任何会话文件；只取用户与助手的可见文本，跳过 thinking 与系统提示。
+跨天会话按天裁剪（clip_to_window）：只保留当天的轮次与工具调用，历史只记数量。
 远程主机（例如你的 2404）通过 `ssh <host> tar` 拉到本地缓存后同样解析；
 连不上时记一条 warning，不影响本机复盘。
 """
@@ -12,13 +13,14 @@ import re
 import subprocess
 import tarfile
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
 from io import BytesIO
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 MAX_TURN_CHARS = 2000
+# 按天裁剪后再截断（见 clip_to_window）；解析阶段不截断，否则跨天会话会丢掉今天的内容
 MAX_TURNS_PER_SESSION = 60
 CORRECTION_MARKERS = re.compile(
     r"不对|错了|不要|别把|不是这样|应该|改成|其实我是说|漏了|重新|再改|不准确|没按|又忘|我是说"
@@ -41,8 +43,20 @@ class Session:
     started_at: datetime | None
     ended_at: datetime | None
     turns: list[Turn] = field(default_factory=list)
-    tools: Counter[str] = field(default_factory=Counter)
+    tool_events: list[tuple[datetime | None, str]] = field(default_factory=list)
     host: str = ""
+    # 会话最初创建时间；按天裁剪后 started_at 变成当天首轮时间，这里保留原值
+    origin_started_at: datetime | None = None
+    # 被裁掉的历史轮次数量（只记数，内容不进摘要）
+    history_turns: int = 0
+
+    @property
+    def tools(self) -> Counter[str]:
+        return Counter(name for _, name in self.tool_events)
+
+    @property
+    def origin_at(self) -> datetime | None:
+        return self.origin_started_at or self.started_at
 
     @property
     def project(self) -> str:
@@ -91,7 +105,7 @@ def _read_jsonl(path: Path):
 def parse_pi_session(path: Path, *, host: str = "") -> Session | None:
     header: dict = {}
     turns: list[Turn] = []
-    tools: Counter[str] = Counter()
+    tool_events: list[tuple[datetime | None, str]] = []
     for event in _read_jsonl(path):
         kind = event.get("type")
         if kind == "session":
@@ -112,7 +126,12 @@ def parse_pi_session(path: Path, *, host: str = "") -> Session | None:
                     if item.get("type") == "text":
                         texts.append(str(item.get("text") or ""))
                     elif item.get("type") == "toolCall":
-                        tools[str(item.get("name") or "unknown")] += 1
+                        tool_events.append(
+                            (
+                                _parse_dt(event.get("timestamp")),
+                                str(item.get("name") or "unknown"),
+                            )
+                        )
             text = _clip("\n".join(texts))
             if text or role == "user":
                 turns.append(Turn(role=role, text=text, at=_parse_dt(event.get("timestamp"))))
@@ -128,16 +147,17 @@ def parse_pi_session(path: Path, *, host: str = "") -> Session | None:
         path=str(path),
         started_at=started,
         ended_at=ended,
-        turns=turns[:MAX_TURNS_PER_SESSION],
-        tools=tools,
+        turns=turns,
+        tool_events=tool_events,
         host=host,
+        origin_started_at=started,
     )
 
 
 def parse_codex_session(path: Path, *, host: str = "") -> Session | None:
     meta: dict = {}
     turns: list[Turn] = []
-    tools: Counter[str] = Counter()
+    tool_events: list[tuple[datetime | None, str]] = []
     for event in _read_jsonl(path):
         kind = event.get("type")
         payload = event.get("payload") or {}
@@ -162,7 +182,9 @@ def parse_codex_session(path: Path, *, host: str = "") -> Session | None:
                         )
                     )
             elif item_type in {"custom_tool_call", "function_call"}:
-                tools[str(payload.get("name") or "unknown")] += 1
+                tool_events.append(
+                    (_parse_dt(event.get("timestamp")), str(payload.get("name") or "unknown"))
+                )
 
     if not turns:
         return None
@@ -175,19 +197,38 @@ def parse_codex_session(path: Path, *, host: str = "") -> Session | None:
         path=str(path),
         started_at=started,
         ended_at=ended,
-        turns=turns[:MAX_TURNS_PER_SESSION],
-        tools=tools,
+        turns=turns,
+        tool_events=tool_events,
         host=host,
+        origin_started_at=started,
     )
 
 
-def _overlaps(session: Session, start: datetime, end: datetime) -> bool:
-    """会话区间与 [start, end) 是否有交集；跨天会话两天都算。"""
-    began = session.started_at
-    if not began:
-        return False
-    finished = session.ended_at or began
-    return began < end and finished >= start
+def clip_to_window(session: Session, start: datetime, end: datetime) -> Session | None:
+    """把会话裁到 [start, end)：只保留窗口内的轮次与工具调用。
+
+    跨天会话只取当天的部分，历史轮次仅保留数量（history_turns），内容不进入摘要。
+    窗口内一轮都没有时返回 None。无时间戳的轮次只在会话创建于窗口内时算作窗口内。
+    """
+    born_inside = bool(session.started_at and start <= session.started_at < end)
+
+    def inside(at: datetime | None) -> bool:
+        return born_inside if at is None else start <= at < end
+
+    turns = [turn for turn in session.turns if inside(turn.at)]
+    if not turns:
+        return None
+    first = next((turn.at for turn in turns if turn.at), session.started_at)
+    last = next((turn.at for turn in reversed(turns) if turn.at), first)
+    return replace(
+        session,
+        turns=turns[:MAX_TURNS_PER_SESSION],
+        tool_events=[item for item in session.tool_events if inside(item[0])],
+        started_at=first,
+        ended_at=last,
+        origin_started_at=session.origin_at,
+        history_turns=len(session.turns) - len(turns),
+    )
 
 
 def collect_local(
@@ -201,12 +242,16 @@ def collect_local(
     sessions: list[Session] = []
     for path in sorted(pi_root.rglob("*.jsonl")):
         session = parse_pi_session(path)
-        if session and _overlaps(session, start, end):
-            sessions.append(session)
+        if session:
+            clipped = clip_to_window(session, start, end)
+            if clipped:
+                sessions.append(clipped)
     for path in sorted(codex_root.rglob("*.jsonl")):
         session = parse_codex_session(path)
-        if session and _overlaps(session, start, end):
-            sessions.append(session)
+        if session:
+            clipped = clip_to_window(session, start, end)
+            if clipped:
+                sessions.append(clipped)
     return sessions
 
 

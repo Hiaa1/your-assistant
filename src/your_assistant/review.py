@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 from .agentlog import (
     Session,
-    _overlaps,
+    clip_to_window,
     collect_local,
     corrections,
     fetch_remote_sessions,
@@ -75,12 +75,24 @@ def _stamp(value: datetime | None, pattern: str = "%H:%M") -> str:
     return value.strftime(pattern) if value else "--:--"
 
 
+def _window_note(session: Session) -> str:
+    """跨天会话的标注：历史只报数量，不带内容。"""
+    if not session.history_turns:
+        return ""
+    return (
+        f"（会话始于 {_stamp(session.origin_at, '%m-%d %H:%M')}，"
+        f"此前 {session.history_turns} 轮历史未纳入）"
+    )
+
+
 def _outline(sessions: list[Session]) -> str:
     blocks: list[str] = []
     for session in sessions:
         header = (
             f"### [{session.source}{'@' + session.host if session.host else ''}] "
-            f"{session.project} ({session.cwd}) {_stamp(session.started_at, '%m-%d %H:%M')}"
+            f"{session.project} ({session.cwd}) "
+            f"今日 {_stamp(session.started_at)}–{_stamp(session.ended_at)}"
+            f"{_window_note(session)}"
         )
         lines = [header]
         for turn in session.turns:
@@ -242,10 +254,17 @@ def render(
 
     lines += ["## 数据与限制", ""]
     for session in sessions:
-        lines.append(
+        line = (
             f"- `{session.source}{'@' + session.host if session.host else ''}` "
-            f"{_stamp(session.started_at)} {session.project}（{session.cwd or '未知目录'}）"
+            f"{session.project}（{session.cwd or '未知目录'}）"
+            f"今日 {_stamp(session.started_at)}–{_stamp(session.ended_at)}"
         )
+        if session.history_turns:
+            line += (
+                f"，会话始于 {_stamp(session.origin_at, '%m-%d %H:%M')}，"
+                f"忽略 {session.history_turns} 轮历史"
+            )
+        lines.append(line)
     for warning in warnings:
         lines.append(f"- ⚠ {warning}")
     lines.append("")
@@ -293,7 +312,10 @@ def run_digest(settings: Settings, day: date, *, use_llm: bool = True, progress=
             continue
         start = datetime.combine(day, time.min, tzinfo=tz)
         end = start + timedelta(days=1)
-        sessions.extend(session for session in remote_sessions if _overlaps(session, start, end))
+        for session in remote_sessions:
+            clipped = clip_to_window(session, start, end)
+            if clipped:
+                sessions.append(clipped)
 
     detected = corrections(sessions)
     fallback = _deterministic(sessions)

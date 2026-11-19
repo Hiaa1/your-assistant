@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from your_assistant.agentlog import (
+    clip_to_window,
     collect_local,
     corrections,
     fetch_remote_sessions,
@@ -98,6 +99,66 @@ def write_codex(path: Path, day: date, *, cwd: str = "/home/hia/paper_2404") -> 
     )
 
 
+def _at(day: date, minutes: int) -> str:
+    return (datetime.combine(day, time.min, tzinfo=TZ) + timedelta(minutes=minutes)).isoformat()
+
+
+def write_pi_multi_day(path: Path, old: date, today: date, *, include_today: bool = True) -> None:
+    """一个几天前创建、今天又继续聊的 pi 会话。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    events = [
+        {
+            "type": "session",
+            "id": "pi-span",
+            "timestamp": _at(old, 780),
+            "cwd": "/home/hia/proj/legacy",
+        },
+        {
+            "type": "message",
+            "timestamp": _at(old, 800),
+            "message": {
+                "role": "user",
+                "content": [{"type": "text", "text": "旧话题：重写索引脚本"}],
+            },
+        },
+        {
+            "type": "message",
+            "timestamp": _at(old, 900),
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "旧回复：索引脚本已重写"},
+                    {"type": "toolCall", "name": "rewrite"},
+                ],
+            },
+        },
+        {
+            "type": "message",
+            "timestamp": _at(today, 540),
+            "message": {
+                "role": "user",
+                "content": [{"type": "text", "text": "新话题：索引加增量更新"}],
+            },
+        },
+        {
+            "type": "message",
+            "timestamp": _at(today, 600),
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "新回复：增量更新已提交"},
+                    {"type": "toolCall", "name": "edit"},
+                ],
+            },
+        },
+    ]
+    if not include_today:
+        events = events[:3]
+    path.write_text(
+        "\n".join(json.dumps(item, ensure_ascii=False) for item in events), encoding="utf-8"
+    )
+
+
 @pytest.fixture
 def logs(settings):
     today = datetime.now(TZ).date()
@@ -138,6 +199,75 @@ def test_digest_detects_corrections_and_writes_files(logs, settings):
     assert digest.review_path and digest.review_path.exists()
     assert digest.cases_path and digest.cases_path.exists()
     assert "纠错案例" in digest.cases_path.read_text(encoding="utf-8")
+
+
+def test_multi_day_session_only_keeps_today_turns(logs, settings):
+    """几天前创建、今天继续聊的会话：只取今天，历史只记数量。"""
+    today = logs
+    old = today - timedelta(days=2)
+    write_pi_multi_day(settings.agent_log_root / "legacy" / "span.jsonl", old, today)
+
+    digest = run_digest(settings, today, use_llm=False)
+    assert "新话题：索引加增量更新" in digest.markdown
+    assert "旧话题" not in digest.markdown
+    assert "旧回复" not in digest.markdown
+
+    legacy = next(session for session in digest.sessions if session.project == "legacy")
+    assert legacy.history_turns == 2
+    assert legacy.origin_at is not None and legacy.origin_at.date() == old
+    assert legacy.tools["edit"] == 1 and "rewrite" not in legacy.tools
+    assert "忽略 2 轮历史" in digest.markdown
+
+
+def test_clip_keeps_today_turns_beyond_turn_limit(settings):
+    """历史轮次再多，也不能把今天的轮次挤出 60 轮上限。"""
+    today = datetime.now(TZ).date()
+    old = today - timedelta(days=3)
+    path = settings.agent_log_root / "long" / "s.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    events: list[dict] = [
+        {"type": "session", "id": "pi-long", "timestamp": _at(old, 600), "cwd": "/p/long"}
+    ]
+    events += [
+        {
+            "type": "message",
+            "timestamp": _at(old, 601 + index),
+            "message": {
+                "role": "user",
+                "content": [{"type": "text", "text": f"历史第 {index} 句"}],
+            },
+        }
+        for index in range(80)
+    ]
+    events.append(
+        {
+            "type": "message",
+            "timestamp": _at(today, 60),
+            "message": {"role": "user", "content": [{"type": "text", "text": "今天唯一一句"}]},
+        }
+    )
+    path.write_text(
+        "\n".join(json.dumps(item, ensure_ascii=False) for item in events), encoding="utf-8"
+    )
+
+    start = datetime.combine(today, time.min, tzinfo=TZ)
+    end = start + timedelta(days=1)
+    clipped = clip_to_window(parse_pi_session(path), start, end)
+    assert clipped is not None
+    assert [turn.text for turn in clipped.turns] == ["今天唯一一句"]
+    assert clipped.history_turns == 80
+
+
+def test_collect_skips_sessions_without_today_turns(settings):
+    """今天没有新消息的旧会话，不再被当成今天的会话。"""
+    today = datetime.now(TZ).date()
+    write_pi_multi_day(
+        settings.agent_log_root / "legacy" / "span.jsonl",
+        today - timedelta(days=5),
+        today,
+        include_today=False,
+    )
+    assert collect_local(settings.agent_log_root, settings.codex_log_root, today, TZ) == []
 
 
 def test_llm_payload_is_normalized(logs, settings, monkeypatch):
